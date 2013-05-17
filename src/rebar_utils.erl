@@ -199,7 +199,21 @@ expand_env_variable(InStr, VarName, RawVarValue) ->
             re:replace(InStr, RegEx, [VarValue, "\\2"], ReOpts)
     end.
 
-vcs_vsn(Config, Vcs, Dir) ->
+app_vcs(false) ->
+    unknown;
+app_vcs({_, _}) ->
+    unknown;
+app_vcs({_, _, {Vcs, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _}, _}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}, _}) ->
+    Vcs.
+
+vcs_vsn(Config, App, Dir) ->
+    Vcs = app_vcs(lists:keyfind(App, 1, rebar_config:get(Config, deps, []))),
     Key = {Vcs, Dir},
     Cache = rebar_config:get_xconf(Config, vsn_cache),
     case dict:find(Key, Cache) of
