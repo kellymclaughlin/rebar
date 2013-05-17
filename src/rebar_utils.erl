@@ -43,6 +43,7 @@
          expand_code_path/0,
          expand_env_variable/3,
          vcs_vsn/3,
+         vcs_vsn/4,
          deprecated/3, deprecated/4,
          get_deprecated_global/4, get_deprecated_global/5,
          get_experimental_global/3, get_experimental_local/3,
@@ -197,6 +198,33 @@ expand_env_variable(InStr, VarName, RawVarValue) ->
             RegEx = io_lib:format("\\\$(~s(\\s|$)|{~s})", [VarName, VarName]),
             ReOpts = [global, {return, list}, unicode],
             re:replace(InStr, RegEx, [VarValue, "\\2"], ReOpts)
+    end.
+
+app_vcs(false) ->
+    unknown;
+app_vcs({_, _}) ->
+    unknown;
+app_vcs({_, _, {Vcs, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _}, _}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}, _}) ->
+    Vcs.
+
+vcs_vsn(Config, App, Dir, _) ->
+    Vcs = app_vcs(lists:keyfind(App, 1, rebar_config:get(Config, deps, []))),
+    Key = {Vcs, Dir},
+    Cache = rebar_config:get_xconf(Config, vsn_cache),
+    case dict:find(Key, Cache) of
+        error ->
+            VsnString = vcs_vsn_1(Vcs, Dir),
+            Cache1 = dict:store(Key, VsnString, Cache),
+            Config1 = rebar_config:set_xconf(Config, vsn_cache, Cache1),
+            {Config1, VsnString};
+        {ok, VsnString} ->
+            {Config, VsnString}
     end.
 
 vcs_vsn(Config, Vcs, Dir) ->
