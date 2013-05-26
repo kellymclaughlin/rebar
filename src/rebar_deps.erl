@@ -385,7 +385,9 @@ is_app_available(Config, Dep=#dep{is_raw=IsRaw}) when IsRaw =:= false ->
         {true, AppFile} ->
             case rebar_app_utils:app_name(Config, AppFile) of
                 {Config1, App} ->
-                    {Config2, Vsn} = rebar_app_utils:app_vsn(Config1, AppFile),
+                    AppDir = filename:dirname(filename:dirname(AppFile)),
+                    {Config2, Vsn} =
+                        rebar_utils:vcs_vsn(Config1, App, AppDir),
                     ?INFO("Looking for ~s-~s ; found ~s-~s at ~s\n",
                           [App, VsnRegex, App, Vsn, Path]),
                     case re:run(Vsn, VsnRegex, [{capture, none}]) of

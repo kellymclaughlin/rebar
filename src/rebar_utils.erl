@@ -212,8 +212,11 @@ app_vcs({_, _, {Vcs, _}, _}) ->
 app_vcs({_, _, {Vcs, _, _}, _}) ->
     Vcs.
 
-vcs_vsn(Config, App, Dir) ->
-    Vcs = app_vcs(lists:keyfind(App, 1, rebar_config:get(Config, deps, []))),
+vcs_vsn(Config, Vcs, Dir) when Vcs =:= git;
+                               Vcs =:= hg;
+                               Vcs =:= svn;
+                               Vcs =:= bzr;
+                               Vcs =:= rsync->
     Key = {Vcs, Dir},
     Cache = rebar_config:get_xconf(Config, vsn_cache),
     case dict:find(Key, Cache) of
@@ -224,7 +227,10 @@ vcs_vsn(Config, App, Dir) ->
             {Config1, VsnString};
         {ok, VsnString} ->
             {Config, VsnString}
-    end.
+    end;
+vcs_vsn(Config, App, Dir) ->
+    Vcs = app_vcs(lists:keyfind(App, 1, rebar_config:get(Config, deps, []))),
+    vcs_vsn(Config, Vcs, Dir).
 
 get_deprecated_global(Config, OldOpt, NewOpt, When) ->
     get_deprecated_global(Config, OldOpt, NewOpt, undefined, When).
