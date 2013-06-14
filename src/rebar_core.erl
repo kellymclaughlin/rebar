@@ -172,6 +172,62 @@ skip_or_process_dir1(AppFile, ModuleSet, Config, CurrentCodePath,
                          CurrentCodePath, ModuleSet)
     end.
 
+process_dir1(Dir, Command, DirSet, Config, CurrentCodePath,
+             {DirModules, ModuleSetFile}) ->
+    {Config1, Modules, PluginModules, AllPredirs} =
+        process_dir_prepare(Config, Dir, DirModules, ModuleSetFile),
+
+    ?DEBUG("Predirs: ~p\n", [AllPredirs]),
+    {Config2, DirSet1} = process_each(AllPredirs, Command, Config1,
+                                      ModuleSetFile, DirSet),
+    Config3 = process_current_dir(Command,
+                                  Config2,
+                                  Modules,
+                                  PluginModules,
+                                  ModuleSetFile,
+                                  Dir,
+                                  rebar_config:is_skip_dir(Config2, Dir)),
+
+    %% Mark the current directory as processed
+    DirSet2 = sets:add_element(Dir, DirSet1),
+
+    Res = post_process_dir(Command,
+                           Config3,
+                           DirSet2,
+                           Modules ++ PluginModules,
+                           ModuleSetFile),
+
+    process_dir_cleanup(Dir, CurrentCodePath),
+
+    %% Return the updated {config, dirset} as result
+    Res.
+
+process_dir_prepare(Config, Dir, DirModules, ModuleSetFile) ->
+    %% Get the list of modules for "any dir". This is a catch-all list
+    %% of modules that are processed in addition to modules associated
+    %% with this directory type. These any_dir modules are processed
+    %% FIRST.
+    {ok, AnyDirModules} = application:get_env(rebar, any_dir_modules),
+
+    Modules = AnyDirModules ++ DirModules,
+
+    %% Invoke 'preprocess' on the modules -- this yields a list of other
+    %% directories that should be processed _before_ the current one.
+    {Config1, Predirs} = acc_modules(Modules, preprocess, Config,
+                                     ModuleSetFile),
+
+    %% Remember associated pre-dirs (used for plugin lookup)
+    PredirsAssoc = remember_cwd_predirs(Dir, Predirs),
+
+    %% Get the list of plug-in modules from rebar.config. These
+    %% modules may participate in preprocess and postprocess.
+    {ok, PluginModules} = plugin_modules(Config1, PredirsAssoc),
+
+    {Config2, PluginPredirs} = acc_modules(PluginModules, preprocess,
+                                           Config1, ModuleSetFile),
+
+    {Config2, Modules, PluginModules, Predirs ++ PluginPredirs}.
+
 -type module_set_file() :: 'undefined' | file:filename().
 -spec process_current_dir(atom(), rebar_config:config(), [module()], [module()],
                           module_set_file(), file:filename(), boolean()) ->
@@ -202,32 +258,6 @@ process_current_dir(Command, Config, Modules, PluginModules,
     execute_post(Command, PluginModules,
                  Config4, ModuleSetFile, Env).
 
-process_dir_prepare(Config, Dir, DirModules, ModuleSetFile) ->
-    %% Get the list of modules for "any dir". This is a catch-all list
-    %% of modules that are processed in addition to modules associated
-    %% with this directory type. These any_dir modules are processed
-    %% FIRST.
-    {ok, AnyDirModules} = application:get_env(rebar, any_dir_modules),
-
-    Modules = AnyDirModules ++ DirModules,
-
-    %% Invoke 'preprocess' on the modules -- this yields a list of other
-    %% directories that should be processed _before_ the current one.
-    {Config1, Predirs} = acc_modules(Modules, preprocess, Config,
-                                     ModuleSetFile),
-
-    %% Remember associated pre-dirs (used for plugin lookup)
-    PredirsAssoc = remember_cwd_predirs(Dir, Predirs),
-
-    %% Get the list of plug-in modules from rebar.config. These
-    %% modules may participate in preprocess and postprocess.
-    {ok, PluginModules} = plugin_modules(Config1, PredirsAssoc),
-
-    {Config2, PluginPredirs} = acc_modules(PluginModules, preprocess,
-                                           Config1, ModuleSetFile),
-
-    {Config2, Modules, PluginModules, Predirs ++ PluginPredirs}.
-
 post_process_dir(Command, Config, DirSet, Modules, ModuleSetFile) ->
     %% Invoke 'postprocess' on the modules. This yields a list of other
     %% directories that should be processed _after_ the current one.
@@ -235,36 +265,6 @@ post_process_dir(Command, Config, DirSet, Modules, ModuleSetFile) ->
         acc_modules(Modules, postprocess, Config, ModuleSetFile),
     ?DEBUG("Postdirs: ~p\n", [Postdirs]),
     process_each(Postdirs, Command, Config1, ModuleSetFile, DirSet).
-
-process_dir1(Dir, Command, DirSet, Config, CurrentCodePath,
-             {DirModules, ModuleSetFile}) ->
-    {Config1, Modules, PluginModules, AllPredirs} =
-        process_dir_prepare(Config, Dir, DirModules, ModuleSetFile),
-
-    ?DEBUG("Predirs: ~p\n", [AllPredirs]),
-    {Config2, DirSet1} = process_each(AllPredirs, Command, Config1,
-                                      ModuleSetFile, DirSet),
-    Config3 = process_current_dir(Command,
-                                  Config2,
-                                  Modules,
-                                  PluginModules,
-                                  ModuleSetFile,
-                                  Dir,
-                                  rebar_config:is_skip_dir(Config2, Dir)),
-
-    %% Mark the current directory as processed
-    DirSet2 = sets:add_element(Dir, DirSet1),
-
-    Res = post_process_dir(Command,
-                           Config3,
-                           DirSet2,
-                           Modules ++ PluginModules,
-                           ModuleSetFile),
-
-    process_dir_cleanup(Dir, CurrentCodePath),
-
-    %% Return the updated {config, dirset} as result
-    Res.
 
 process_dir_cleanup(Dir, CodePath) ->
     %% Make sure the CWD is reset properly; processing the dirs may have

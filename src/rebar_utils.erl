@@ -199,19 +199,6 @@ expand_env_variable(InStr, VarName, RawVarValue) ->
             re:replace(InStr, RegEx, [VarValue, "\\2"], ReOpts)
     end.
 
-app_vcs(false) ->
-    unknown;
-app_vcs({_, _}) ->
-    unknown;
-app_vcs({_, _, {Vcs, _}}) ->
-    Vcs;
-app_vcs({_, _, {Vcs, _, _}}) ->
-    Vcs;
-app_vcs({_, _, {Vcs, _}, _}) ->
-    Vcs;
-app_vcs({_, _, {Vcs, _, _}, _}) ->
-    Vcs.
-
 vcs_vsn(Config, Vcs, Dir) when Vcs =:= git;
                                Vcs =:= hg;
                                Vcs =:= svn;
@@ -450,6 +437,19 @@ emulate_escript_foldl(Fun, Acc, File) ->
         {error, _} = Error ->
             Error
     end.
+
+app_vcs(false) ->
+    unknown;
+app_vcs({_, _}) ->
+    unknown;
+app_vcs({_, _, {Vcs, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _}, _}) ->
+    Vcs;
+app_vcs({_, _, {Vcs, _, _}, _}) ->
+    Vcs.
 
 vcs_vsn1(Config, Vcs, Dir) ->
     Key = {Vcs, Dir},
