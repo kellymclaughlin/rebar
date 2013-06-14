@@ -216,21 +216,14 @@ vcs_vsn(Config, Vcs, Dir) when Vcs =:= git;
                                Vcs =:= hg;
                                Vcs =:= svn;
                                Vcs =:= bzr;
-                               Vcs =:= rsync->
-    Key = {Vcs, Dir},
-    Cache = rebar_config:get_xconf(Config, vsn_cache),
-    case dict:find(Key, Cache) of
-        error ->
-            VsnString = vcs_vsn_1(Vcs, Dir),
-            Cache1 = dict:store(Key, VsnString, Cache),
-            Config1 = rebar_config:set_xconf(Config, vsn_cache, Cache1),
-            {Config1, VsnString};
-        {ok, VsnString} ->
-            {Config, VsnString}
-    end;
-vcs_vsn(Config, App, Dir) ->
+                               Vcs =:= rsync;
+                               Vcs =:= fossil ->
+    vcs_vsn1(Config, Vcs, Dir);
+vcs_vsn(Config, {cmd, _}=Cmd, Dir) ->
+    vcs_vsn1(Config, Cmd, Dir);
+vcs_vsn(Config, App, Dir) when is_atom(App) ->
     Vcs = app_vcs(lists:keyfind(App, 1, rebar_config:get(Config, deps, []))),
-    vcs_vsn(Config, Vcs, Dir).
+    vcs_vsn1(Config, Vcs, Dir).
 
 get_deprecated_global(Config, OldOpt, NewOpt, When) ->
     get_deprecated_global(Config, OldOpt, NewOpt, undefined, When).
@@ -458,7 +451,20 @@ emulate_escript_foldl(Fun, Acc, File) ->
             Error
     end.
 
-vcs_vsn_1(Vcs, Dir) ->
+vcs_vsn1(Config, Vcs, Dir) ->
+    Key = {Vcs, Dir},
+    Cache = rebar_config:get_xconf(Config, vsn_cache),
+    case dict:find(Key, Cache) of
+        error ->
+            VsnString = vcs_vsn2(Vcs, Dir),
+            Cache1 = dict:store(Key, VsnString, Cache),
+            Config1 = rebar_config:set_xconf(Config, vsn_cache, Cache1),
+            {Config1, VsnString};
+        {ok, VsnString} ->
+            {Config, VsnString}
+    end.
+
+vcs_vsn2(Vcs, Dir) ->
     case vcs_vsn_cmd(Vcs) of
         {unknown, VsnString} ->
             ?DEBUG("vcs_vsn: Unknown VCS atom in vsn field: ~p\n", [Vcs]),
