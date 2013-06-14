@@ -172,8 +172,9 @@ skip_or_process_dir1(AppFile, ModuleSet, Config, CurrentCodePath,
                          CurrentCodePath, ModuleSet)
     end.
 
--spec process_current_dir(atom(), rebar_config:config(), [atom()], [atom()],
-                          set(), string(), boolean()) ->
+-type module_set_file() :: 'undefined' | file:filename().
+-spec process_current_dir(atom(), rebar_config:config(), [module()], [module()],
+                          module_set_file(), file:filename(), boolean()) ->
                                  rebar_config:config().
 process_current_dir(Command, Config, _, _, _, Dir, true) ->
     %% Do not execute the command on the directory, as some
