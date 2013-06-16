@@ -77,24 +77,7 @@ preprocess(Config, _) ->
     %%
     %% Also, if skip_deps=comma,separated,app,list, then only the given
     %% dependencies are skipped.
-    NewConfig = case rebar_config:get_global(Config4, skip_deps, false) of
-        "true" ->
-            lists:foldl(
-                fun(#dep{dir = Dir}, C) ->
-                        rebar_config:set_skip_dir(C, Dir)
-                end, Config4, AvailableDeps);
-        Apps when is_list(Apps) ->
-            SkipApps = [list_to_atom(App) || App <- string:tokens(Apps, ",")],
-            lists:foldl(
-                fun(#dep{dir = Dir, app = App}, C) ->
-                        case lists:member(App, SkipApps) of
-                            true -> rebar_config:set_skip_dir(C, Dir);
-                            false -> C
-                        end
-                end, Config4, AvailableDeps);
-        _ ->
-            Config4
-    end,
+    NewConfig = maybe_skip_deps(Config4, AvailableDeps),
 
     %% Filtering out 'raw' dependencies so that no commands other than
     %% deps-related can be executed on their directories.
@@ -291,6 +274,26 @@ update_deps_code_path(Config, [Dep | Rest]) ->
                 Config1
         end,
     update_deps_code_path(Config2, Rest).
+
+maybe_skip_deps(Config, AvailableDeps) ->
+    case rebar_config:get_global(Config, skip_deps, false) of
+        "true" ->
+            lists:foldl(
+              fun(#dep{dir = Dir}, C) ->
+                      rebar_config:set_skip_dir(C, Dir)
+              end, Config, AvailableDeps);
+        Apps when is_list(Apps) ->
+            SkipApps = [list_to_atom(App) || App <- string:tokens(Apps, ",")],
+            lists:foldl(
+              fun(#dep{dir = Dir, app = App}, C) ->
+                      case lists:member(App, SkipApps) of
+                          true -> rebar_config:set_skip_dir(C, Dir);
+                          false -> C
+                      end
+              end, Config, AvailableDeps);
+        _ ->
+            Config
+    end.
 
 find_deps(Config, find=Mode, Deps) ->
     find_deps(Config, Mode, Deps, {[], []});
