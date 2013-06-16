@@ -388,36 +388,7 @@ is_app_available(Config, Dep=#dep{is_raw=false}) ->
     ?DEBUG("is_app_available, looking for App ~p with Path ~p~n", [App, Path]),
     case rebar_app_utils:is_app_dir(Path) of
         {true, AppFile} ->
-            case rebar_app_utils:app_name(Config, AppFile) of
-                {Config1, App} ->
-                    AppDir = filename:dirname(filename:dirname(AppFile)),
-                    {Config2, Vsn} =
-                        rebar_utils:vcs_vsn(Config1, App, AppDir),
-                    ?INFO("Looking for ~s-~s ; found ~s-~s at ~s\n",
-                          [App, VsnRegex, App, Vsn, Path]),
-                    case re:run(Vsn, VsnRegex, [{capture, none}]) of
-                        match ->
-                            {Config2, {true, Path}};
-                        nomatch ->
-                            case is_force_dep(App, Config) of
-                                true ->
-                                    {Config2, {true, Path}};
-                                false ->
-                                    ?WARN("~s has version ~p; requested regex was ~s\n",
-                                          [AppFile, Vsn, VsnRegex]),
-                                    {Config2,
-                                     {false, {version_mismatch,
-                                              {AppFile,
-                                               {expected, VsnRegex}, {has, Vsn}}}}}
-                            end
-                    end;
-                {Config1, OtherApp} ->
-                    ?WARN("~s has application id ~p; expected ~p\n",
-                          [AppFile, OtherApp, App]),
-                    {Config1,
-                     {false, {name_mismatch,
-                              {AppFile, {expected, App}, {has, OtherApp}}}}}
-            end;
+            check_app_info(Config, App, VsnRegex, Path, AppFile);
         false ->
             ?WARN("Expected ~s to be an app dir (containing ebin/*.app), "
                   "but no .app found.\n", [Path]),
@@ -425,7 +396,8 @@ is_app_available(Config, Dep=#dep{is_raw=false}) ->
     end;
 is_app_available(Config, Dep=#dep{is_raw=true}) ->
     #dep{app=App, dir=Path} = Dep,
-    ?DEBUG("is_app_available, looking for Raw Depencency ~p with Path ~p~n", [App, Path]),
+    ?DEBUG("is_app_available, looking for Raw Depencency ~p with Path ~p~n",
+           [App, Path]),
     case filelib:is_dir(Path) of
         true ->
             %% TODO: look for version string in <Path>/VERSION file? Not clear
@@ -436,6 +408,40 @@ is_app_available(Config, Dep=#dep{is_raw=true}) ->
             ?WARN("Expected ~s to be a raw dependency directory, "
                   "but no directory found.\n", [Path]),
             {Config, {false, {missing_raw_dependency_directory, Path}}}
+    end.
+
+check_app_info(Config, App, VsnRegex, Path, AppFile) ->
+    case rebar_app_utils:app_name(Config, AppFile) of
+        {Config1, App} ->
+            check_app_vsn(Config1, App, VsnRegex, Path, AppFile);
+        {Config1, OtherApp} ->
+            ?WARN("~s has application id ~p; expected ~p\n",
+                  [AppFile, OtherApp, App]),
+            {Config1,
+             {false, {name_mismatch,
+                      {AppFile, {expected, App}, {has, OtherApp}}}}}
+    end.
+
+check_app_vsn(Config, App, VsnRegex, Path, AppFile) ->
+    AppDir = filename:dirname(filename:dirname(AppFile)),
+    {Config1, Vsn} = rebar_utils:vcs_vsn(Config, App, AppDir),
+    ?INFO("Looking for ~s-~s ; found ~s-~s at ~s\n",
+          [App, VsnRegex, App, Vsn, Path]),
+    case re:run(Vsn, VsnRegex, [{capture, none}]) of
+        match ->
+            {Config1, {true, Path}};
+        nomatch ->
+            case is_force_dep(App, Config) of
+                true ->
+                    {Config1, {true, Path}};
+                false ->
+                    ?WARN("~s has version ~p; requested regex was ~s\n",
+                          [AppFile, Vsn, VsnRegex]),
+                    {Config1,
+                     {false, {version_mismatch,
+                              {AppFile,
+                               {expected, VsnRegex}, {has, Vsn}}}}}
+            end
     end.
 
 use_source(Config, Dep) ->
