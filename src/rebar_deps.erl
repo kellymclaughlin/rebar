@@ -63,9 +63,9 @@ preprocess(Config, _) ->
     Deps = rebar_config:get_local(Config1, deps, []),
     {Config2, {AvailableDeps, MissingDeps}} = find_deps(Config1, find, Deps),
 
-    %% Update the set of deps that are have `force_version' specified to indicate
-    %% the specified version should be used regardless of any subsequent versions
-    %% of the same app that are encountered.
+    %% Update the set of deps that have `force_version' specified to indicate
+    %% the specified version should be used regardless of any subsequent
+    %% versions of the same app that are encountered.
     Config3 = maybe_update_force_deps(AvailableDeps ++ MissingDeps, Config2),
 
     %% Add available deps to code path
@@ -142,12 +142,14 @@ do_check_deps(Config) ->
     Deps = rebar_config:get_local(Config, deps, []),
     {Config1, {_AvailableDeps, MissingDeps}} = find_deps(Config, find, Deps),
     MissingDeps1 = [D || D <- MissingDeps, D#dep.source =/= undefined],
+
     %% For each missing dep with a specified source, try to pull it.
     {Config2, PulledDeps} =
         lists:foldl(fun(D, {C, PulledDeps0}) ->
                             {C1, D1} = use_source(C, D),
                             {C1, [D1 | PulledDeps0]}
                     end, {Config1, []}, MissingDeps1),
+
     %% Add each pulled dep to our list of dirs for post-processing. This yields
     %% the necessary transitivity of the deps
     {ok, save_dep_dirs(Config2, lists:reverse(PulledDeps))}.
@@ -375,14 +377,14 @@ require_source_engine(Source) ->
     true = source_engine_avail(Source),
     ok.
 
-%% IsRaw = false means regular Erlang/OTP dependency
+%% is_raw = false means regular Erlang/OTP dependency
 %%
-%% IsRaw = true means non-Erlang/OTP dependency, e.g. the one that does not
+%% is_raw = true means non-Erlang/OTP dependency, e.g. the one that does not
 %% have a proper .app file
-is_app_available(Config, Dep=#dep{is_raw=IsRaw}) when IsRaw =:= false ->
-    #dep{app=App,
-         vsn_regex=VsnRegex,
-         dir=Path} = Dep,
+is_app_available(Config, Dep=#dep{is_raw=false}) ->
+    #dep{ app=App,
+          vsn_regex=VsnRegex,
+          dir=Path } = Dep,
     ?DEBUG("is_app_available, looking for App ~p with Path ~p~n", [App, Path]),
     case rebar_app_utils:is_app_dir(Path) of
         {true, AppFile} ->
@@ -421,7 +423,7 @@ is_app_available(Config, Dep=#dep{is_raw=IsRaw}) when IsRaw =:= false ->
                   "but no .app found.\n", [Path]),
             {Config, {false, {missing_app_file, Path}}}
     end;
-is_app_available(Config, Dep=#dep{is_raw=IsRaw}) when IsRaw =:= true ->
+is_app_available(Config, Dep=#dep{is_raw=true}) ->
     #dep{app=App, dir=Path} = Dep,
     ?DEBUG("is_app_available, looking for Raw Depencency ~p with Path ~p~n", [App, Path]),
     case filelib:is_dir(Path) of
