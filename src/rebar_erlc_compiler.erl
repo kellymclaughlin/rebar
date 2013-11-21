@@ -259,7 +259,7 @@ is_lib_avail(Config, DictKey, Mod, Hrl, Name) ->
 doterl_compile(Config, OutDir) ->
     doterl_compile(Config, OutDir, []).
 
-doterl_compile(Config, OutDir, MoreSources) ->
+gather_src_and_includes(Config, MoreSources) ->
     FirstErls = rebar_config:get_list(Config, erl_first_files, []),
     ErlOpts = rebar_utils:erl_opts(Config),
     ?DEBUG("erl_opts ~p~n", [ErlOpts]),
@@ -269,7 +269,22 @@ doterl_compile(Config, OutDir, MoreSources) ->
     SrcDirs = rebar_utils:src_dirs(proplists:append_values(src_dirs, ErlOpts)),
     RestErls  = [Source || Source <- gather_src(SrcDirs, []) ++ MoreSources,
                            not lists:member(Source, FirstErls)],
+    Includes = gather_includes(["include"] ++ SrcDirs
+                               ++ proplists:get_all_values(i, ErlOpts), []),
+    {FirstErls, RestErls, Includes}.
 
+doterl_compile(Config, OutDir, MoreSources) ->
+    {FirstErls, RestErls, Includes} =
+        gather_src_and_includes(Config, MoreSources),
+    %% Make sure that ebin/ exists
+    ok = filelib:ensure_dir(filename:join("ebin", "dummy.beam")),
+    NeedsCompile = needs_compile(RestErls ++ FirstErls ++ Includes, "ebin"),
+    doterl_compile(Config, OutDir, FirstErls, RestErls, NeedsCompile).
+
+doterl_compile(_Config, _OutDir, _FirstErls, _RestErls, false) ->
+    %% No source files or includes have changes; skip this app
+    ok;
+doterl_compile(Config, OutDir, FirstErls, RestErls, true) ->
     %% Split RestErls so that parse_transforms and behaviours are instead added
     %% to erl_first_files, parse transforms first.
     %% This should probably be somewhat combined with inspect_epp
@@ -289,10 +304,10 @@ doterl_compile(Config, OutDir, MoreSources) ->
 
     NewFirstErls = FirstErls ++ ParseTransforms ++ Behaviours,
 
-    %% Make sure that ebin/ exists and is on the path
-    ok = filelib:ensure_dir(filename:join("ebin", "dummy.beam")),
+    %% Make sure that ebin/ is on the path
     CurrPath = code:get_path(),
     true = code:add_path(filename:absname("ebin")),
+    ErlOpts = rebar_utils:erl_opts(Config),
     OutDir1 = proplists:get_value(outdir, ErlOpts, OutDir),
     rebar_base_compiler:run(Config, NewFirstErls, OtherErls,
                             fun(S, C) ->
@@ -300,6 +315,7 @@ doterl_compile(Config, OutDir, MoreSources) ->
                             end),
     true = code:set_path(CurrPath),
     ok.
+
 
 -spec include_path(file:filename(),
                    rebar_config:config()) -> [file:filename(), ...].
@@ -363,9 +379,13 @@ needs_compile(Source, Target, Hrls) ->
     lists:any(fun(I) -> TargetLastMod < filelib:last_modified(I) end,
               [Source] ++ Hrls).
 
+needs_compile(Sources, Target) ->
+    TargetLastMod = filelib:last_modified(Target),
+    lists:any(fun(I) -> TargetLastMod < filelib:last_modified(I) end, Sources).
+
 -spec internal_erl_compile(rebar_config:config(), file:filename(),
                            file:filename(), list()) -> 'ok' | 'skipped'.
-internal_erl_compile(Config, Source, Outdir, ErlOpts) ->
+ internal_erl_compile(Config, Source, Outdir, ErlOpts) ->
     %% Determine the target name and includes list by inspecting the source file
     {Module, Hrls} = inspect(Source, include_path(Source, Config)),
 
@@ -451,6 +471,11 @@ gather_src([], Srcs) ->
     Srcs;
 gather_src([Dir|Rest], Srcs) ->
     gather_src(Rest, Srcs ++ rebar_utils:find_files(Dir, ".*\\.erl\$")).
+
+gather_includes([], Incls) ->
+    Incls;
+gather_includes([Dir|Rest], Incls) ->
+    gather_includes(Rest, Incls ++ rebar_utils:find_files(Dir, ".*\\.hrl\$")).
 
 -spec dirs(file:filename()) -> [file:filename()].
 dirs(Dir) ->
